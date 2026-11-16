@@ -84,6 +84,14 @@ App 本身不沙盒（需要调用 sudo 助手）；Widget Extension 是沙盒�
 
 - 直接把自己构建的 App 发给别人，对方 Gatekeeper 默认会拦（Apple Development 证书只适合本机/同 Team 设备）。
 - 要对外分发二进制，需要 **Developer ID Application** 证书 + hardened runtime + Apple 公证（notarytool），并把 Bundle ID 换成你自己注册的；`build.sh` 对 `Developer ID Application` 开头的证书会自动加 `--options runtime --timestamp`。
+- 具体步骤见 [docs/RELEASE.md](docs/RELEASE.md)，或直接运行：
+
+```bash
+CODESIGN_ID="Developer ID Application: Your Name (TEAMID)" \
+NOTARY_PROFILE="glow-lite" \
+./release.sh
+```
+
 - App Store 不适合本项目：需要 root、要安装 sudoers 文件，过不了沙盒审核。
 - 公开分发前建议把 App 图标里的 Apple Logo 换成通用图标，避免商标问题。
 

@@ -212,8 +212,12 @@ enum IconArt {
         let scale = min(rect.width * widthRatio / max(black.size.width, 1),
                         rect.height * heightRatio / max(black.size.height, 1))
         let size = NSSize(width: black.size.width * scale, height: black.size.height * scale)
-        let target = NSRect(x: rect.midX - size.width / 2,
-                            y: rect.midY - size.height / 2,
+        // 光学居中：苹果字形上轻下重（叶子在上、果体在下），
+        // 若按外框几何居中，果体会显得偏下；整体轻微上移一点点。
+        let optical = NSSize(width: size.width * 0.0015,
+                             height: rect.height * 0.025)
+        let target = NSRect(x: rect.midX - size.width / 2 + optical.width,
+                            y: rect.midY - size.height / 2 + optical.height,
                             width: size.width, height: size.height)
 
         // 黑色苹果层（灭灯；星空黑机身补一圈极淡玻璃反光）

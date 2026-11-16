@@ -1,0 +1,71 @@
+name: Bug report
+description: Something is broken or the island does not behave as expected
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Glow Lite depends on macOS 27.3 beta APIs, so please include exact versions.
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      description: "Example: 27.3 beta (26C5035r)"
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Mac model
+      description: "Output of `sysctl hw.model` (example: Mac17,13)"
+    validations:
+      required: true
+  - type: input
+    id: xcode
+    attributes:
+      label: Xcode version
+      description: "Xcode 27.3 beta (27C...)" 
+    validations:
+      required: true
+  - type: dropdown
+    id: signing
+    attributes:
+      label: How was the app signed?
+      options:
+        - Apple Development certificate
+        - Ad-hoc (codesign -)
+        - Developer ID
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Launch Glow Lite
+        2. Click the Dock icon
+        3. Tap the island
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: "Optional: `log show --last 2m --predicate 'process == \"GlowLite\" OR process == \"GlowWidget\"'`"
+    validations:
+      required: false

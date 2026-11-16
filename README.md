@@ -24,10 +24,12 @@
 ## Demo
 
 <p align="center">
-  <img src="docs/assets/expanded-island.png" alt="Expanded Dynamic Island" width="100%">
+  <img src="docs/assets/island-states.png" alt="Dynamic Island: logo off and logo on" width="100%">
 </p>
 
 Glow Lite is a small native macOS app built on **ActivityKit** and **WidgetKit**. It publishes a Live Activity, so the control lives in the system **Dynamic Island** — no custom floating window, no private APIs.
+
+> **No prebuilt `.app` or `.dmg` yet.** The Live Activity extension must be signed, and distributing a binary to other Macs requires Developer ID + notarization. See [Why is there no prebuilt app or DMG?](#why-is-there-no-prebuilt-app-or-dmg) for the full explanation.
 
 ## Features
 
@@ -44,30 +46,91 @@ Glow Lite is a small native macOS app built on **ActivityKit** and **WidgetKit**
 | --- | --- |
 | OS | **macOS 27.3+** (currently in beta) |
 | Hardware | Apple Silicon + a **PROLED XDR** MacBook Pro for the visible light effect |
-| Build | **Xcode 27.3+** with the macOS 27.3 SDK |
+| Build | **Xcode 27.3+** with the macOS 27.3 SDK (Command Line Tools alone are not enough) |
 | Signing | An **Apple Development** certificate for the Widget Extension |
 
 > On Macs without the PROLED XDR display the app still runs, but toggling the light has no visible effect.
 
-## Install
+## Build from source
 
-There are no prebuilt binaries yet — build from source. This also keeps the signing story transparent: the Live Activity extension must be signed to load.
+There is no download button that "just works" yet. The supported path is to build locally, because the Live Activity extension has to be signed by a team and the app installs a privileged helper.
+
+### 1. Check your Xcode
+
+```bash
+xcodebuild -version
+xcode-select -p
+```
+
+`xcodebuild -version` must report **Xcode 27.3 or newer**. `xcode-select -p` should point at that Xcode. If it points at an older install:
+
+```bash
+sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
+```
+
+You can skip the `sudo xcode-select` and pass `DEVELOPER_DIR` to the build script instead.
+
+### 2. Clone the repository
 
 ```bash
 git clone https://github.com/Lostnal/glow-lite.git
 cd glow-lite
+```
 
+### 3. Find your signing identity
+
+```bash
+security find-identity -v -p codesigning
+```
+
+Copy the full `Apple Development: Your Name (TEAMID)` string. You need this certificate for the Widget Extension; an ad-hoc build may produce an app whose Live Activity never appears.
+
+### 4. Build
+
+```bash
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
 CODESIGN_ID="Apple Development: Your Name (TEAMID)" \
 ./build.sh
+```
 
+- `DEVELOPER_DIR` is optional if `xcode-select` already points at Xcode 27.3+. You can also use `XCODE_APP=/Applications/Xcode-beta.app`.
+- `CODESIGN_ID` defaults to ad-hoc (`-`). Ad-hoc is fine for reading the source, but the extension usually will not load, so the island will not show.
+- The script runs the icon generator, compiles the app and extension, generates `Metadata.appintents` for both targets, signs the bundle, and writes `dist/Glow Lite.app`.
+
+### 5. Install and register the extension
+
+```bash
 ditto "dist/Glow Lite.app" "/Applications/Glow Lite.app"
+pluginkit -a "/Applications/Glow Lite.app/Contents/PlugIns/GlowWidget.appex"
 open "/Applications/Glow Lite.app"
 ```
 
-- `build.sh` auto-detects Xcode 27.3+ (or set `DEVELOPER_DIR` / `XCODE_APP`).
-- `CODESIGN_ID` defaults to ad-hoc. An ad-hoc build can run, but the **Widget Extension may not be loaded**, so the island will not appear.
-- Find your identity with `security find-identity -v -p codesigning`.
+- If `ditto` reports a permission error, use `sudo ditto …`.
+- `pluginkit -a` registers the Widget Extension. Skipping it can leave the island empty even when the app runs.
+- On first launch the app asks for an administrator password once to install the helper described in [Security](#security).
+
+### 6. Verify
+
+```bash
+codesign -v "/Applications/Glow Lite.app"
+pluginkit -m -i com.local.glowlite.widget
+```
+
+Then click the Dock icon, tap the island, and tap the Apple. If something is off:
+
+```bash
+log show --last 2m --predicate 'process == "GlowWidget" OR process == "GlowLite"'
+```
+
+### Troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| App opens, island never appears | Extension not signed or not registered | Rebuild with an Apple Development certificate, then `pluginkit -a …/GlowWidget.appex` |
+| “Glow Lite is damaged” / Gatekeeper blocks it | Ad-hoc or Apple Development signature, quarantine | Build locally, or use a Developer ID + notarized build |
+| Light does not change | Mac lacks the PROLED XDR display | Expected on other models |
+| Admin prompt on every launch | Helper was declined or removed | Approve once, or use the per-click fallback |
+| `build.sh` says no Xcode 27.3+ | `xcode-select` points at an older Xcode | Set `DEVELOPER_DIR` or use `xcode-select -s` |
 
 ## Usage
 
@@ -116,27 +179,17 @@ sudo rm -f /usr/local/libexec/logolight-helper /private/etc/sudoers.d/logolight
 
 See [SECURITY.md](SECURITY.md) for the threat model and reporting instructions.
 
-## Build
+## Why is there no prebuilt app or DMG?
 
-```bash
-DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
-CODESIGN_ID="Apple Development: Your Name (TEAMID)" \
-./build.sh
-```
+This is deliberate, not an oversight:
 
-The script compiles the app and the Widget Extension, generates `Metadata.appintents` for both targets (without it, the island button is inert), signs the bundle, and writes `dist/Glow Lite.app`.
+1. **The Widget Extension must be signed.** Ad-hoc builds can run the app, but macOS often refuses to load an ad-hoc Live Activity extension. A binary that opens but never shows the island would be worse than no binary.
+2. **Distribution needs a paid Apple Developer account.** Making a double-clickable app for other Macs requires a **Developer ID Application** certificate, hardened runtime, notarization, and stapling. This project does not have that certificate, so it cannot produce a trustworthy DMG.
+3. **macOS 27.3 is still beta.** Live Activity APIs and behavior may change before release; a binary built today could break tomorrow.
+4. **The feature is hardware-specific.** Only PROLED XDR MacBook Pros have the glowing logo; a generic binary would mislead most users.
+5. **The app installs a sudoers helper.** Building from source lets you audit exactly what runs as root before installing it.
 
-## Distribution
-
-Direct binary distribution needs an **Apple Developer Program** membership and a **Developer ID Application** certificate. `release.sh` performs the full flow: Developer ID build → DMG → notarization (`notarytool`) → stapling → Gatekeeper verification.
-
-```bash
-CODESIGN_ID="Developer ID Application: Your Name (TEAMID)" \
-NOTARY_PROFILE="glow-lite" \
-./release.sh
-```
-
-See [docs/RELEASE.md](docs/RELEASE.md). Mac App Store distribution is not possible: the app needs root and installs a sudoers rule.
+If you have a Developer ID certificate, `release.sh` performs the whole flow (build → DMG → notarize → staple) and [docs/RELEASE.md](docs/RELEASE.md) documents it. Once such a build exists, it can be attached to a GitHub Release.
 
 ## Limitations
 
@@ -149,7 +202,7 @@ See [docs/RELEASE.md](docs/RELEASE.md). Mac App Store distribution is not possib
 ## FAQ
 
 **The island never appears.**
-The Widget Extension is probably not signed or not registered. Use an Apple Development certificate, then rebuild and run `pluginkit -a "…/GlowWidget.appex"`.
+The Widget Extension is probably not signed or not registered. Use an Apple Development certificate, rebuild, then run `pluginkit -a "…/GlowWidget.appex"`.
 
 **The logo does not change.**
 Your Mac likely lacks the PROLED XDR display. The command is accepted but has no visible effect on other models.
